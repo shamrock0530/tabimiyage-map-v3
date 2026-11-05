@@ -76,8 +76,46 @@
       <h2>登録済みの旅行</h2>
       <div id="tripList"></div>
     </section>
+
+    <section class="card" style="margin-top:20px">
+      <h2>おみやげ商品を登録する</h2>
+
+      <form id="productForm">
+        <p>
+          <label for="productTrip">旅行を選択</label>
+          <select id="productTrip" required
+                  style="display:block;width:100%;padding:12px;margin-top:8px">
+          </select>
+        </p>
+
+        <p>
+          <label for="productName">商品名</label>
+          <input id="productName" type="text"
+                 placeholder="例：ずんだ餅" required
+                 style="display:block;width:100%;padding:12px;margin-top:8px">
+        </p>
+
+        <p>
+          <label for="productQuantity">購入予定数量</label>
+          <input id="productQuantity" type="number"
+                 min="1" step="1" value="1" required
+                 style="display:block;width:100%;padding:12px;margin-top:8px">
+        </p>
+
+        <button type="submit"
+                style="padding:12px 20px;background:#176b57;color:white;border:0;border-radius:8px">
+          商品を登録
+        </button>
+      </form>
+    </section>
+
+    <section class="card" style="margin-top:20px">
+      <h2>登録済みのおみやげ</h2>
+      <div id="productList"></div>
+    </section>
   </main>
-  <script src="./app.js?v=3.0.1" defer></script>
+  <script src="./app.js?v=3.0.2" defer></script>
 </body>
 </html>
+
 

@@ -50,6 +50,34 @@
       <p>旅行・商品・購入数量・写真・店舗マップを
       このアプリで管理できるようにします。</p>
     </div>
+
+    <section class="card" style="margin-top:20px">
+      <h2>旅行を登録する</h2>
+      <form id="tripForm">
+        <p>
+          <label for="tripName">旅行名</label>
+          <input id="tripName" type="text"
+                 placeholder="例：仙台旅行" required
+                 style="display:block;width:100%;padding:12px;margin-top:8px">
+        </p>
+        <p>
+          <label for="tripDate">旅行日</label>
+          <input id="tripDate" type="date"
+                 style="display:block;width:100%;padding:12px;margin-top:8px">
+        </p>
+        <button type="submit"
+                style="padding:12px 20px;background:#176b57;color:white;border:0;border-radius:8px">
+          旅行を登録
+        </button>
+      </form>
+    </section>
+
+    <section class="card" style="margin-top:20px">
+      <h2>登録済みの旅行</h2>
+      <div id="tripList"></div>
+    </section>
   </main>
+  <script src="./app.js?v=3.0.1" defer></script>
 </body>
 </html>
+

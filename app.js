@@ -671,4 +671,82 @@ renderProducts = function () {
   });
 };
 
+// ===== Ver.3.0 Web画像貼り付け機能 =====
+
+async function pasteProductPhoto(productId) {
+  if (!navigator.clipboard || !navigator.clipboard.read) {
+    alert("このブラウザは画像の貼り付けに対応していません。");
+    return;
+  }
+
+  try {
+    const items = await navigator.clipboard.read();
+
+    for (const item of items) {
+      const imageType = item.types.find(
+        type => type.startsWith("image/")
+      );
+
+      if (!imageType) continue;
+
+      const blob = await item.getType(imageType);
+      await savePhoto(productId, blob);
+
+      renderProducts();
+      alert("画像を登録しました。");
+      return;
+    }
+
+    alert(
+      "コピーされた画像が見つかりません。\n" +
+      "Webサイトの画像を右クリックして「画像をコピー」を選んでください。"
+    );
+  } catch (error) {
+    console.error("画像貼り付けエラー", error);
+    alert(
+      "画像を貼り付けできませんでした。\n" +
+      "ブラウザのクリップボードへのアクセスを許可してください。"
+    );
+  }
+}
+
+// 商品一覧に画像貼り付けボタンを追加
+const renderProductsBeforePaste = renderProducts;
+
+renderProducts = function () {
+  renderProductsBeforePaste();
+
+  const list = document.getElementById("productList");
+  const select = document.getElementById("productTrip");
+
+  if (!list || !select) return;
+
+  const selectedProducts = products.filter(
+    product => product.tripId === select.value
+  );
+
+  const cards = Array.from(list.children);
+
+  selectedProducts.forEach((product, index) => {
+    const card = cards[index];
+    if (!card) return;
+
+    const actions = card.lastElementChild;
+    if (!actions) return;
+
+    const pasteButton = document.createElement("button");
+    pasteButton.type = "button";
+    pasteButton.textContent = "📋 画像を貼り付け";
+    pasteButton.style.padding = "8px 12px";
+    pasteButton.style.marginTop = "8px";
+    pasteButton.style.marginRight = "8px";
+
+    pasteButton.addEventListener("click", () => {
+      pasteProductPhoto(product.id);
+    });
+
+    actions.appendChild(pasteButton);
+  });
+};
+
 

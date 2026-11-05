@@ -237,3 +237,146 @@ renderTrips = function () {
   originalRenderTrips();
   renderProducts();
 };
+
+// ===== Ver.3.0 商品編集・購入数量管理 =====
+
+// 購入済み数量を増減する
+function changePurchased(id, amount) {
+  const product = products.find(item => item.id === id);
+  if (!product) return;
+
+  const current = Number(product.purchased) || 0;
+  const limit = Number(product.quantity) || 0;
+
+  product.purchased = Math.max(
+    0,
+    Math.min(limit, current + amount)
+  );
+
+  saveProducts();
+  renderProducts();
+}
+
+// 商品名・購入予定数量を編集する
+function editProduct(id) {
+  const product = products.find(item => item.id === id);
+  if (!product) return;
+
+  const name = prompt("商品名を編集", product.name);
+  if (name === null) return;
+
+  const newName = name.trim();
+  if (!newName) {
+    alert("商品名を入力してください。");
+    return;
+  }
+
+  const quantity = prompt(
+    "購入予定数量を入力",
+    String(product.quantity)
+  );
+  if (quantity === null) return;
+
+  const count = Number(quantity);
+  if (!Number.isSafeInteger(count) || count < 1) {
+    alert("1以上の整数を入力してください。");
+    return;
+  }
+
+  product.name = newName;
+  product.quantity = count;
+  product.purchased = Math.min(product.purchased, count);
+
+  saveProducts();
+  renderProducts();
+}
+
+// 商品を削除する
+function deleteProduct(id) {
+  const product = products.find(item => item.id === id);
+  if (!product) return;
+
+  if (!confirm(`「${product.name}」を削除しますか？`)) {
+    return;
+  }
+
+  products = products.filter(item => item.id !== id);
+  saveProducts();
+  renderProducts();
+}
+
+// 商品一覧を操作ボタン付きに更新
+renderProducts = function () {
+  const select = document.getElementById("productTrip");
+  const list = document.getElementById("productList");
+  if (!select || !list) return;
+
+  const previous = select.value;
+  select.replaceChildren();
+
+  trips.forEach(trip => {
+    const option = document.createElement("option");
+    option.value = trip.id;
+    option.textContent = trip.name;
+    select.appendChild(option);
+  });
+
+  if (trips.some(trip => trip.id === previous)) {
+    select.value = previous;
+  }
+
+  list.replaceChildren();
+
+  const selectedProducts = products.filter(
+    product => product.tripId === select.value
+  );
+
+  if (selectedProducts.length === 0) {
+    const message = document.createElement("p");
+    message.textContent =
+      "この旅行の商品はまだ登録されていません。";
+    list.appendChild(message);
+    return;
+  }
+
+  selectedProducts.forEach(product => {
+    const card = document.createElement("div");
+    card.style.padding = "14px 0";
+    card.style.borderBottom = "1px solid #ddd";
+
+    const title = document.createElement("strong");
+    title.textContent = product.name;
+
+    const quantity = document.createElement("p");
+    quantity.textContent =
+      `購入予定 ${product.quantity}個 / 購入済み ${product.purchased}個`;
+
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.flexWrap = "wrap";
+    actions.style.gap = "8px";
+
+    const buttons = [
+      ["−1", () => changePurchased(product.id, -1)],
+      ["＋1", () => changePurchased(product.id, 1)],
+      ["編集", () => editProduct(product.id)],
+      ["削除", () => deleteProduct(product.id)]
+    ];
+
+    buttons.forEach(([label, action]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.style.padding = "8px 12px";
+      button.style.border = "1px solid #ccc";
+      button.style.borderRadius = "8px";
+      button.style.background = "#fff";
+      button.addEventListener("click", action);
+      actions.appendChild(button);
+    });
+
+    card.append(title, quantity, actions);
+    list.appendChild(card);
+  });
+};
+

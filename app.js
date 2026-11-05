@@ -380,3 +380,115 @@ renderProducts = function () {
   });
 };
 
+// ===== Ver.3.0 Googleマップ店舗リンク =====
+
+// GoogleマップのURLを確認する
+function validMapLink(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+
+    return url.protocol === "https:" &&
+      (
+        host === "maps.app.goo.gl" ||
+        host === "goo.gl" ||
+        host === "google.com" ||
+        host.endsWith(".google.com") ||
+        host === "google.co.jp" ||
+        host.endsWith(".google.co.jp")
+      );
+  } catch {
+    return false;
+  }
+}
+
+// 店舗のGoogleマップURLを登録・変更する
+function editMapLink(id) {
+  const product = products.find(item => item.id === id);
+  if (!product) return;
+
+  const input = prompt(
+    "Googleマップの店舗URLを入力してください",
+    product.mapLink || ""
+  );
+
+  if (input === null) return;
+
+  const url = input.trim();
+
+  if (url && !validMapLink(url)) {
+    alert("Googleマップの共有URLを入力してください。");
+    return;
+  }
+
+  product.mapLink = url;
+  saveProducts();
+  renderProducts();
+}
+
+// Googleマップで店舗を開く
+function openMapLink(id) {
+  const product = products.find(item => item.id === id);
+  if (!product || !validMapLink(product.mapLink || "")) {
+    alert("店舗のGoogleマップURLが登録されていません。");
+    return;
+  }
+
+  window.open(product.mapLink, "_blank", "noopener,noreferrer");
+}
+
+// 既存の商品一覧表示に店舗ボタンを追加する
+const previousRenderProducts = renderProducts;
+
+renderProducts = function () {
+  previousRenderProducts();
+
+  const list = document.getElementById("productList");
+  if (!list) return;
+
+  const selectedTripId =
+    document.getElementById("productTrip")?.value;
+
+  const cards = Array.from(list.children);
+  const selectedProducts = products.filter(
+    product => product.tripId === selectedTripId
+  );
+
+  selectedProducts.forEach((product, index) => {
+    const card = cards[index];
+    if (!card) return;
+
+    const actions = card.lastElementChild;
+    if (!actions) return;
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "📍 店舗URL登録";
+    editButton.style.padding = "8px 12px";
+    editButton.style.border = "1px solid #ccc";
+    editButton.style.borderRadius = "8px";
+    editButton.style.background = "#fff";
+    editButton.addEventListener(
+      "click",
+      () => editMapLink(product.id)
+    );
+    actions.appendChild(editButton);
+
+    if (validMapLink(product.mapLink || "")) {
+      const mapButton = document.createElement("button");
+      mapButton.type = "button";
+      mapButton.textContent = "🗺️ 地図を開く";
+      mapButton.style.padding = "8px 12px";
+      mapButton.style.border = "1px solid #ccc";
+      mapButton.style.borderRadius = "8px";
+      mapButton.style.background = "#fff";
+      mapButton.addEventListener(
+        "click",
+        () => openMapLink(product.id)
+      );
+      actions.appendChild(mapButton);
+    }
+  });
+};
+
+

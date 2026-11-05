@@ -491,4 +491,184 @@ renderProducts = function () {
   });
 };
 
+// ===== Ver.3.0 商品写真管理 =====
+// 写真はIndexedDBに保存します。
+
+const PHOTO_DB_NAME = "tabimiyage-map-v3-photos";
+const PHOTO_STORE = "photos";
+
+function openPhotoDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(PHOTO_DB_NAME, 1);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(PHOTO_STORE)) {
+        db.createObjectStore(PHOTO_STORE);
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function savePhoto(productId, file) {
+  const db = await openPhotoDB();
+
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(PHOTO_STORE, "readwrite");
+      tx.objectStore(PHOTO_STORE).put(file, productId);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function getPhoto(productId) {
+  const db = await openPhotoDB();
+
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(PHOTO_STORE, "readonly");
+      const request = tx.objectStore(PHOTO_STORE).get(productId);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function deletePhoto(productId) {
+  const db = await openPhotoDB();
+
+  try {
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(PHOTO_STORE, "readwrite");
+      tx.objectStore(PHOTO_STORE).delete(productId);
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+// 写真の選択・撮影・変更
+function selectProductPhoto(productId) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "image/*";
+
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      await savePhoto(productId, file);
+      renderProducts();
+    } catch (error) {
+      console.error(error);
+      alert("写真を保存できませんでした。");
+    }
+  });
+
+  input.click();
+}
+
+// 写真の削除
+async function removeProductPhoto(productId) {
+  if (!confirm("この商品の写真を削除しますか？")) {
+    return;
+  }
+
+  try {
+    await deletePhoto(productId);
+    renderProducts();
+  } catch (error) {
+    console.error(error);
+    alert("写真を削除できませんでした。");
+  }
+}
+
+// 商品一覧に写真と操作ボタンを追加
+const renderProductsBeforePhotos = renderProducts;
+
+renderProducts = function () {
+  renderProductsBeforePhotos();
+
+  const list = document.getElementById("productList");
+  const select = document.getElementById("productTrip");
+  if (!list || !select) return;
+
+  const selectedProducts = products.filter(
+    product => product.tripId === select.value
+  );
+
+  const cards = Array.from(list.children);
+
+  selectedProducts.forEach(async (product, index) => {
+    const card = cards[index];
+    if (!card) return;
+
+    const photoArea = document.createElement("div");
+    photoArea.style.margin = "10px 0";
+
+    const actions = card.lastElementChild;
+
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.textContent = "📷 写真を登録・変更";
+    addButton.style.padding = "8px 12px";
+    addButton.style.marginRight = "8px";
+    addButton.addEventListener(
+      "click",
+      () => selectProductPhoto(product.id)
+    );
+
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.textContent = "写真を削除";
+    removeButton.style.padding = "8px 12px";
+    removeButton.addEventListener(
+      "click",
+      () => removeProductPhoto(product.id)
+    );
+
+    if (actions) {
+      actions.append(addButton, removeButton);
+    }
+
+    card.insertBefore(photoArea, actions);
+
+    try {
+      const file = await getPhoto(product.id);
+      if (!file || !card.isConnected) return;
+
+      const image = document.createElement("img");
+      const url = URL.createObjectURL(file);
+
+      image.src = url;
+      image.alt = product.name;
+      image.style.width = "120px";
+      image.style.height = "120px";
+      image.style.objectFit = "cover";
+      image.style.borderRadius = "10px";
+
+      image.onload = () => URL.revokeObjectURL(url);
+      image.onerror = () => URL.revokeObjectURL(url);
+
+      photoArea.appendChild(image);
+    } catch (error) {
+      console.error("写真の読み込みに失敗", error);
+    }
+  });
+};
+
 

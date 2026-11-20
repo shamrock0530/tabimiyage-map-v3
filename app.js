@@ -749,4 +749,124 @@ renderProducts = function () {
   });
 };
 
+// ===== Ver.3.0 JSONバックアップ機能 =====
+
+// 写真データをJSONに保存できる形式へ変換
+function photoToDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 写真を含むバックアップを作成
+async function createBackup() {
+  const button = document.getElementById("backupButton");
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "バックアップ作成中...";
+  }
+
+  try {
+    const photoData = {};
+
+    // 商品ごとに写真を読み込む
+    for (const product of products) {
+      const photo = await getPhoto(product.id);
+
+      if (photo) {
+        photoData[product.id] = await photoToDataURL(photo);
+      }
+    }
+
+    const backup = {
+      app: "tabimiyage-map",
+      version: "3.0",
+      backupVersion: 1,
+      createdAt: new Date().toISOString(),
+      trips: trips,
+      products: products,
+      photos: photoData
+    };
+
+    const json = JSON.stringify(backup, null, 2);
+
+    const blob = new Blob(
+      [json],
+      { type: "application/json;charset=utf-8" }
+    );
+
+    const url = URL.createObjectURL(blob);
+
+    const date = new Date();
+    const dateText =
+      date.getFullYear() + "-" +
+      String(date.getMonth() + 1).padStart(2, "0") + "-" +
+      String(date.getDate()).padStart(2, "0");
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "tabimiyage-backup-" + dateText + ".json";
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    // ダウンロード開始後にURLを解放
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+
+  } catch (error) {
+    console.error("バックアップ作成エラー", error);
+    alert("バックアップを作成できませんでした。");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "💾 バックアップを保存";
+    }
+  }
+}
+
+// バックアップボタンを表示する
+function addBackupButton() {
+  const main = document.querySelector("main");
+  if (!main || document.getElementById("backupButton")) return;
+
+  const section = document.createElement("section");
+  section.className = "card";
+  section.style.marginTop = "20px";
+
+  const heading = document.createElement("h2");
+  heading.textContent = "データのバックアップ";
+
+  const description = document.createElement("p");
+  description.textContent =
+    "旅行・商品・写真をまとめてJSONファイルに保存します。";
+
+  const button = document.createElement("button");
+  button.id = "backupButton";
+  button.type = "button";
+  button.textContent = "💾 バックアップを保存";
+  button.style.padding = "12px 20px";
+  button.style.background = "#176b57";
+  button.style.color = "white";
+  button.style.border = "0";
+  button.style.borderRadius = "8px";
+
+  button.addEventListener("click", createBackup);
+
+  section.append(heading, description, button);
+  main.appendChild(section);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", addBackupButton);
+} else {
+  addBackupButton();
+}
+
 

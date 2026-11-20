@@ -1201,4 +1201,238 @@ if (document.readyState === "loading") {
   addRecipientSection();
 }
 
+// ===== Ver.3.0 商品ごとの配布先・数量管理 =====
+
+const ALLOCATION_KEY = "tabimiyage-map-v3-allocations";
+
+function loadAllocations() {
+  try {
+    const data = JSON.parse(
+      localStorage.getItem(ALLOCATION_KEY) || "[]"
+    );
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("割当データ読み込みエラー", error);
+    return [];
+  }
+}
+
+let allocations = loadAllocations();
+
+function saveAllocations() {
+  localStorage.setItem(
+    ALLOCATION_KEY,
+    JSON.stringify(allocations)
+  );
+}
+
+// 商品に割り当てられた数量の合計
+function getAllocatedQuantity(productId) {
+  return allocations
+    .filter(item => String(item.productId) === String(productId))
+    .reduce((sum, item) => sum + item.quantity, 0);
+}
+
+// 配布先と数量を登録
+function addAllocation(productId, recipientId, quantity) {
+  const product = products.find(
+    item => String(item.id) === String(productId)
+  );
+  const recipient = recipients.find(
+    item => item.id === recipientId
+  );
+
+  if (!product || !recipient) {
+    alert("商品または配布先が見つかりません。");
+    return;
+  }
+
+  const count = Number(quantity);
+  if (!Number.isSafeInteger(count) || count < 1) {
+    alert("数量は1以上の整数で入力してください。");
+    return;
+  }
+
+  const total = Number(product.quantity);
+  if (
+    !Number.isSafeInteger(total) ||
+    getAllocatedQuantity(product.id) + count > total
+  ) {
+    alert("商品の予定数量を超えて割り当てることはできません。");
+    return;
+  }
+
+  const existing = allocations.find(
+    item =>
+      String(item.productId) === String(product.id) &&
+      item.recipientId === recipientId
+  );
+
+  if (existing) {
+    existing.quantity += count;
+  } else {
+    allocations.push({
+      id: crypto.randomUUID(),
+      productId: product.id,
+      recipientId,
+      quantity: count
+    });
+  }
+
+  saveAllocations();
+  renderAllocations();
+}
+
+// 割当を削除
+function deleteAllocation(id) {
+  if (!confirm("この割当を削除しますか？")) return;
+
+  allocations = allocations.filter(item => item.id !== id);
+  saveAllocations();
+  renderAllocations();
+}
+
+// 割当管理画面を表示
+function renderAllocations() {
+  const area = document.getElementById("allocationArea");
+  if (!area) return;
+
+  area.replaceChildren();
+
+  if (products.length === 0) {
+    area.textContent = "商品を登録すると割当ができます。";
+    return;
+  }
+
+  products.forEach(product => {
+    const card = document.createElement("div");
+    card.style.padding = "15px";
+    card.style.marginBottom = "15px";
+    card.style.border = "1px solid #dddddd";
+    card.style.borderRadius = "8px";
+
+    const heading = document.createElement("h3");
+    heading.textContent = product.name;
+    card.appendChild(heading);
+
+    const allocated = getAllocatedQuantity(product.id);
+    const remaining = Number(product.quantity) - allocated;
+
+    const summary = document.createElement("p");
+    summary.textContent =
+      "予定：" + product.quantity + "個 / " +
+      "割当済：" + allocated + "個 / " +
+      "未割当：" + remaining + "個";
+    card.appendChild(summary);
+
+    const related = allocations.filter(
+      item => String(item.productId) === String(product.id)
+    );
+
+    related.forEach(item => {
+      const recipient = recipients.find(
+        r => r.id === item.recipientId
+      );
+
+      const row = document.createElement("div");
+      row.style.padding = "6px 0";
+
+      const label = document.createElement("span");
+      label.textContent =
+        (recipient ? recipient.name : "削除済みの配布先") +
+        "：" + item.quantity + "個 ";
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "割当削除";
+      remove.addEventListener("click", () => {
+        deleteAllocation(item.id);
+      });
+
+      row.append(label, remove);
+      card.appendChild(row);
+    });
+
+    if (recipients.length > 0) {
+      const form = document.createElement("form");
+
+      const select = document.createElement("select");
+      recipients.forEach(recipient => {
+        const option = document.createElement("option");
+        option.value = recipient.id;
+        option.textContent = recipient.name;
+        select.appendChild(option);
+      });
+
+      const input = document.createElement("input");
+      input.type = "number";
+      input.inputMode = "numeric";
+      input.min = "1";
+      input.step = "1";
+      input.value = "1";
+      input.required = true;
+      input.style.width = "70px";
+      input.style.margin = "8px";
+
+      const button = document.createElement("button");
+      button.type = "submit";
+      button.textContent = "割り当てる";
+
+      form.append(select, input, button);
+      form.addEventListener("submit", event => {
+        event.preventDefault();
+        addAllocation(product.id, select.value, input.value);
+      });
+
+      card.appendChild(form);
+    }
+
+    area.appendChild(card);
+  });
+}
+
+// 割当管理セクションを追加
+function addAllocationSection() {
+  const main = document.querySelector("main");
+  if (!main || document.getElementById("allocationArea")) return;
+
+  const section = document.createElement("section");
+  section.className = "card";
+  section.style.marginTop = "20px";
+
+  const heading = document.createElement("h2");
+  heading.textContent = "📦 商品の配布先・数量割当";
+
+  const area = document.createElement("div");
+  area.id = "allocationArea";
+
+  section.append(heading, area);
+  main.appendChild(section);
+
+  renderAllocations();
+}
+
+// 商品一覧を更新したとき、割当画面も更新
+const previousRenderProductsForAllocation = renderProducts;
+renderProducts = function() {
+  previousRenderProductsForAllocation();
+  renderAllocations();
+};
+
+// 配布先一覧を更新したとき、割当画面も更新
+const previousRenderRecipientsForAllocation = renderRecipients;
+renderRecipients = function() {
+  previousRenderRecipientsForAllocation();
+  renderAllocations();
+};
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    addAllocationSection
+  );
+} else {
+  addAllocationSection();
+}
+
 

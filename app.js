@@ -869,4 +869,159 @@ if (document.readyState === "loading") {
   addBackupButton();
 }
 
+// ===== Ver.3.0 JSONバックアップ復元機能 =====
+
+function dataURLToBlob(dataURL) {
+  const parts = dataURL.split(",");
+  const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64$/.exec(parts[0]);
+
+  if (!match || parts.length !== 2) {
+    throw new Error("写真データの形式が不正です。");
+  }
+
+  const binary = atob(parts[1]);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return new Blob([bytes], { type: match[1] });
+}
+
+// JSONファイルを選択して内容を確認
+async function selectBackupFile() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json,application/json";
+
+  input.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    try {
+      const backup = JSON.parse(await file.text());
+
+      if (
+        backup.app !== "tabimiyage-map" ||
+        backup.version !== "3.0" ||
+        backup.backupVersion !== 1 ||
+        !Array.isArray(backup.trips) ||
+        !Array.isArray(backup.products) ||
+        !backup.photos ||
+        typeof backup.photos !== "object" ||
+        Array.isArray(backup.photos)
+      ) {
+        throw new Error("対応していないバックアップファイルです。");
+      }
+
+      // 写真を事前に変換して形式を確認
+      const restoredPhotos = new Map();
+
+      for (const [id, dataURL] of Object.entries(backup.photos)) {
+        if (
+          typeof dataURL !== "string" ||
+          !backup.products.some(product => String(product.id) === id)
+        ) {
+          throw new Error("写真と商品の対応が不正です。");
+        }
+
+        restoredPhotos.set(id, dataURLToBlob(dataURL));
+      }
+
+      const message =
+        "バックアップの内容\n\n" +
+        "旅行：" + backup.trips.length + "件\n" +
+        "商品：" + backup.products.length + "件\n" +
+        "写真：" + restoredPhotos.size + "枚\n\n" +
+        "現在のデータ\n" +
+        "旅行：" + trips.length + "件\n" +
+        "商品：" + products.length + "件\n\n" +
+        "現在のデータをバックアップの内容に置き換えます。\n" +
+        "続行しますか？";
+
+      if (!confirm(message)) return;
+
+      await restoreBackupData(backup, restoredPhotos);
+
+      alert("バックアップから復元しました。");
+
+      location.reload();
+
+    } catch (error) {
+      console.error("バックアップ復元エラー", error);
+      alert(
+        "復元できませんでした。\n" +
+        error.message
+      );
+    }
+  });
+
+  input.click();
+}
+
+// 旅行・商品・写真を復元
+async function restoreBackupData(backup, restoredPhotos) {
+  const db = await openPhotoDB();
+
+  try {
+    // 写真を1回のトランザクションで置き換える
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(PHOTO_STORE, "readwrite");
+      const store = tx.objectStore(PHOTO_STORE);
+
+      store.clear();
+
+      for (const [id, blob] of restoredPhotos) {
+        store.put(blob, id);
+      }
+
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+
+    // 写真保存後に旅行・商品を置き換える
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(backup.trips)
+    );
+
+    localStorage.setItem(
+      PRODUCT_KEY,
+      JSON.stringify(backup.products)
+    );
+
+  } finally {
+    db.close();
+  }
+}
+
+// 復元ボタンを追加
+function addRestoreButton() {
+  const backupButton = document.getElementById("backupButton");
+  if (!backupButton || document.getElementById("restoreButton")) return;
+
+  const restoreButton = document.createElement("button");
+  restoreButton.id = "restoreButton";
+  restoreButton.type = "button";
+  restoreButton.textContent = "📂 バックアップから復元";
+  restoreButton.style.padding = "12px 20px";
+  restoreButton.style.margin = "10px";
+  restoreButton.style.background = "#ffffff";
+  restoreButton.style.color = "#176b57";
+  restoreButton.style.border = "1px solid #176b57";
+  restoreButton.style.borderRadius = "8px";
+
+  restoreButton.addEventListener("click", selectBackupFile);
+
+  backupButton.parentElement.appendChild(restoreButton);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", addRestoreButton);
+} else {
+  addRestoreButton();
+}
+
 

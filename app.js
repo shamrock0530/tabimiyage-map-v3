@@ -1024,4 +1024,181 @@ if (document.readyState === "loading") {
   addRestoreButton();
 }
 
+// ===== Ver.3.0 おみやげ配布先管理 =====
+
+const RECIPIENT_KEY = "tabimiyage-map-v3-recipients";
+
+// 配布先データを読み込む
+function loadRecipients() {
+  try {
+    const data = JSON.parse(
+      localStorage.getItem(RECIPIENT_KEY) || "[]"
+    );
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("配布先データの読み込みエラー", error);
+    return [];
+  }
+}
+
+let recipients = loadRecipients();
+
+// 配布先データを保存する
+function saveRecipients() {
+  localStorage.setItem(
+    RECIPIENT_KEY,
+    JSON.stringify(recipients)
+  );
+}
+
+// 配布先を登録する
+function addRecipient(name) {
+  const trimmedName = name.trim();
+
+  if (!trimmedName) {
+    alert("配布先の名前を入力してください。");
+    return;
+  }
+
+  if (recipients.some(
+    recipient => recipient.name === trimmedName
+  )) {
+    alert("同じ名前の配布先が登録されています。");
+    return;
+  }
+
+  recipients.push({
+    id: crypto.randomUUID(),
+    name: trimmedName
+  });
+
+  saveRecipients();
+  renderRecipients();
+}
+
+// 配布先を削除する
+function deleteRecipient(id) {
+  const recipient = recipients.find(
+    item => item.id === id
+  );
+
+  if (!recipient) return;
+
+  if (!confirm(
+    "「" + recipient.name + "」を削除しますか？"
+  )) {
+    return;
+  }
+
+  recipients = recipients.filter(
+    item => item.id !== id
+  );
+
+  saveRecipients();
+  renderRecipients();
+}
+
+// 配布先一覧を表示する
+function renderRecipients() {
+  const list = document.getElementById("recipientList");
+  if (!list) return;
+
+  list.replaceChildren();
+
+  if (recipients.length === 0) {
+    const message = document.createElement("p");
+    message.textContent = "配布先はまだ登録されていません。";
+    list.appendChild(message);
+    return;
+  }
+
+  recipients.forEach(recipient => {
+    const row = document.createElement("div");
+
+    row.style.display = "flex";
+    row.style.justifyContent = "space-between";
+    row.style.alignItems = "center";
+    row.style.gap = "12px";
+    row.style.padding = "12px 0";
+    row.style.borderBottom = "1px solid #dddddd";
+
+    const name = document.createElement("span");
+    name.textContent = recipient.name;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "削除";
+    button.style.padding = "8px 12px";
+
+    button.addEventListener("click", () => {
+      deleteRecipient(recipient.id);
+    });
+
+    row.append(name, button);
+    list.appendChild(row);
+  });
+}
+
+// 配布先登録画面を追加する
+function addRecipientSection() {
+  const main = document.querySelector("main");
+
+  if (!main || document.getElementById("recipientForm")) {
+    return;
+  }
+
+  const section = document.createElement("section");
+  section.className = "card";
+  section.style.marginTop = "20px";
+
+  const heading = document.createElement("h2");
+  heading.textContent = "🎁 おみやげの配布先";
+
+  const form = document.createElement("form");
+  form.id = "recipientForm";
+
+  const input = document.createElement("input");
+  input.id = "recipientName";
+  input.type = "text";
+  input.placeholder = "例：家族、友人A、会社";
+  input.required = true;
+  input.style.width = "100%";
+  input.style.padding = "12px";
+  input.style.marginBottom = "12px";
+
+  const button = document.createElement("button");
+  button.type = "submit";
+  button.textContent = "配布先を登録";
+  button.style.padding = "12px 20px";
+  button.style.background = "#176b57";
+  button.style.color = "white";
+  button.style.border = "0";
+  button.style.borderRadius = "8px";
+
+  const list = document.createElement("div");
+  list.id = "recipientList";
+  list.style.marginTop = "20px";
+
+  form.append(input, button);
+  section.append(heading, form, list);
+  main.appendChild(section);
+
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    addRecipient(input.value);
+    input.value = "";
+  });
+
+  renderRecipients();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    addRecipientSection
+  );
+} else {
+  addRecipientSection();
+}
+
 

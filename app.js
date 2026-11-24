@@ -1599,4 +1599,113 @@ if (document.readyState === "loading") {
   initializeAllocationIntegrity();
 }
 
+// ===== Ver.3.0 不要な商品データの整理 =====
+
+// 存在しない旅行に紐付く商品を検出
+function findOrphanProducts() {
+  const validTripIds = new Set(
+    trips.map(trip => String(trip.id))
+  );
+
+  return products.filter(
+    product => !validTripIds.has(String(product.tripId))
+  );
+}
+
+// 不要な商品・写真・割当情報を整理
+async function cleanupOrphanProducts() {
+  const orphanProducts = findOrphanProducts();
+
+  if (orphanProducts.length === 0) {
+    alert("不要な商品データはありません。");
+    return;
+  }
+
+  const names = orphanProducts
+    .map(product => "・" + product.name)
+    .join("\n");
+
+  const message =
+    "存在しない旅行に紐付く商品が見つかりました。\n\n" +
+    names + "\n\n" +
+    "対象商品：" + orphanProducts.length + "件\n\n" +
+    "対象の商品・写真・数量割当を削除します。\n" +
+    "正常な旅行や商品、配布先は削除しません。\n\n" +
+    "整理を実行しますか？";
+
+  if (!confirm(message)) return;
+
+  const orphanIds = new Set(
+    orphanProducts.map(product => String(product.id))
+  );
+
+  products = products.filter(
+    product => !orphanIds.has(String(product.id))
+  );
+
+  allocations = allocations.filter(
+    item => !orphanIds.has(String(item.productId))
+  );
+
+  saveProducts();
+  saveAllocations();
+
+  renderTrips();
+  renderProducts();
+  renderAllocations();
+
+  let photoErrors = 0;
+
+  for (const product of orphanProducts) {
+    try {
+      await deletePhoto(product.id);
+    } catch (error) {
+      photoErrors++;
+      console.error("不要な写真の削除エラー", error);
+    }
+  }
+
+  alert(
+    orphanProducts.length + "件の商品データを整理しました。" +
+    (photoErrors > 0
+      ? "\n一部の写真を削除できませんでした。"
+      : "")
+  );
+}
+
+// データ整理ボタンを追加
+function addOrphanCleanupButton() {
+  const backupButton = document.getElementById("backupButton");
+
+  if (
+    !backupButton ||
+    document.getElementById("orphanCleanupButton")
+  ) return;
+
+  const button = document.createElement("button");
+
+  button.id = "orphanCleanupButton";
+  button.type = "button";
+  button.textContent = "不要なデータを確認・整理";
+  button.style.padding = "12px 20px";
+  button.style.margin = "10px";
+  button.style.background = "#ffffff";
+  button.style.color = "#555555";
+  button.style.border = "1px solid #aaaaaa";
+  button.style.borderRadius = "8px";
+
+  button.addEventListener("click", cleanupOrphanProducts);
+
+  backupButton.parentElement.appendChild(button);
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    addOrphanCleanupButton
+  );
+} else {
+  addOrphanCleanupButton();
+}
+
 

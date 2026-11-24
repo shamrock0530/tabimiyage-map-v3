@@ -44,18 +44,75 @@ function addTrip(name, date) {
   return true;
 }
 
-function deleteTrip(id) {
+
+async function deleteTrip(id) {
   const trip = trips.find(item => item.id === id);
   if (!trip) return;
 
-  if (!confirm(`「${trip.name}」を削除しますか？`)) {
-    return;
+  // この旅行に関連する商品を取得
+  const relatedProducts = products.filter(
+    item => String(item.tripId) === String(id)
+  );
+
+  const productIds = new Set(
+    relatedProducts.map(item => String(item.id))
+  );
+
+  const relatedAllocations = allocations.filter(
+    item => productIds.has(String(item.productId))
+  );
+
+  const message =
+    "「" + trip.name + "」を削除しますか？\n\n" +
+    "関連する商品：" + relatedProducts.length + "件\n" +
+    "関連する数量割当：" + relatedAllocations.length + "件\n\n" +
+    "関連する商品・写真・数量割当も削除されます。";
+
+  if (!confirm(message)) return;
+
+  // 関連する商品を削除
+  products = products.filter(
+    item => String(item.tripId) !== String(id)
+  );
+
+  // 旅行を削除
+  trips = trips.filter(item => item.id !== id);
+
+  // 関連する数量割当を削除
+  allocations = allocations.filter(
+    item => !productIds.has(String(item.productId))
+  );
+
+  // データを保存
+  saveTrips();
+  saveProducts();
+  saveAllocations();
+
+  // すべての関連画面を更新
+  renderTrips();
+  renderProducts();
+  renderAllocations();
+
+  // 関連する写真を削除
+  let photoError = false;
+
+  for (const product of relatedProducts) {
+    try {
+      await deletePhoto(product.id);
+    } catch (error) {
+      photoError = true;
+      console.error("写真削除エラー", error);
+    }
   }
 
-  trips = trips.filter(item => item.id !== id);
-  saveTrips();
-  renderTrips();
+  if (photoError) {
+    alert(
+      "旅行と商品は削除されましたが、" +
+      "一部の写真データを削除できませんでした。"
+    );
+  }
 }
+
 
 function renderTrips() {
   const list = document.getElementById("tripList");

@@ -1435,4 +1435,97 @@ if (document.readyState === "loading") {
   addAllocationSection();
 }
 
+// ===== Ver.3.0 データ整合性管理 =====
+
+// 存在しない商品・配布先の割当を整理する
+function cleanupAllocations() {
+  const validProductIds = new Set(
+    products.map(product => String(product.id))
+  );
+
+  const validRecipientIds = new Set(
+    recipients.map(recipient => recipient.id)
+  );
+
+  const before = allocations.length;
+
+  allocations = allocations.filter(item =>
+    validProductIds.has(String(item.productId)) &&
+    validRecipientIds.has(item.recipientId)
+  );
+
+  if (before !== allocations.length) {
+    saveAllocations();
+  }
+}
+
+// 割当済みの配布先を削除する場合は確認する
+deleteRecipient = function(id) {
+  const recipient = recipients.find(
+    item => item.id === id
+  );
+
+  if (!recipient) return;
+
+  const related = allocations.filter(
+    item => item.recipientId === id
+  );
+
+  const total = related.reduce(
+    (sum, item) => sum + item.quantity, 0
+  );
+
+  let message =
+    "「" + recipient.name + "」を削除しますか？";
+
+  if (related.length > 0) {
+    message +=
+      "\n\n関連する商品割当：" + related.length + "件" +
+      "\n割当数量：" + total + "個" +
+      "\n\n関連する割当情報も削除されます。";
+  }
+
+  if (!confirm(message)) return;
+
+  recipients = recipients.filter(
+    item => item.id !== id
+  );
+
+  saveRecipients();
+  cleanupAllocations();
+  renderRecipients();
+  renderAllocations();
+};
+
+// 商品保存時に不要な割当を整理する
+const previousSaveProductsForIntegrity = saveProducts;
+
+saveProducts = function() {
+  previousSaveProductsForIntegrity();
+  cleanupAllocations();
+};
+
+// 商品一覧の更新時にも整合性を確認する
+const previousRenderProductsForIntegrity = renderProducts;
+
+renderProducts = function() {
+  cleanupAllocations();
+  previousRenderProductsForIntegrity();
+};
+
+// 起動時にデータの整合性を確認する
+function initializeAllocationIntegrity() {
+  cleanupAllocations();
+  renderAllocations();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener(
+    "DOMContentLoaded",
+    initializeAllocationIntegrity
+  );
+} else {
+  initializeAllocationIntegrity();
+}
+
 

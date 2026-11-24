@@ -258,6 +258,7 @@ function changePurchased(id, amount) {
 }
 
 // 商品名・購入予定数量を編集する
+
 function editProduct(id) {
   const product = products.find(item => item.id === id);
   if (!product) return;
@@ -280,6 +281,19 @@ function editProduct(id) {
   const count = Number(quantity);
   if (!Number.isSafeInteger(count) || count < 1) {
     alert("1以上の整数を入力してください。");
+    return;
+  }
+
+  // 配布先への割当済み数量を確認
+  const allocated = getAllocatedQuantity(product.id);
+
+  if (count < allocated) {
+    alert(
+      "予定数量を変更できません。\n\n" +
+      "現在の割当済み数量：" + allocated + "個\n" +
+      "変更しようとした数量：" + count + "個\n\n" +
+      "予定数量を減らす場合は、先に配布先への割当数量を調整してください。"
+    );
     return;
   }
 

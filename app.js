@@ -963,6 +963,7 @@ function dataURLToBlob(dataURL) {
 }
 
 // JSONファイルを選択して内容を確認
+
 async function selectBackupFile() {
   const input = document.createElement("input");
   input.type = "file";
@@ -975,18 +976,250 @@ async function selectBackupFile() {
     try {
       const backup = JSON.parse(await file.text());
 
+      // バックアップ形式の確認
       if (
+        !backup ||
         backup.app !== "tabimiyage-map" ||
         backup.version !== "3.0" ||
-        backup.backupVersion !== 1 ||
+        ![1, 2].includes(backup.backupVersion) ||
         !Array.isArray(backup.trips) ||
         !Array.isArray(backup.products) ||
         !backup.photos ||
         typeof backup.photos !== "object" ||
         Array.isArray(backup.photos)
       ) {
-        throw new Error("対応していないバックアップファイルです。");
+        throw new Error(
+          "対応していないバックアップファイルです。"
+        );
       }
+
+      // 旧形式と新形式の判定
+      const isOldBackup = backup.backupVersion === 1;
+
+      if (isOldBackup) {
+        backup.recipients = [];
+        backup.allocations = [];
+      }
+
+      if (
+        !Array.isArray(backup.recipients) ||
+        !Array.isArray(backup.allocations)
+      ) {
+        throw new Error(
+          "配布先または数量割当の形式が不正です。"
+        );
+      }
+
+      // IDの形式と重複を確認
+      function checkIds(items, label) {
+        const ids = new Set();
+
+        for (const item of items) {
+          if (
+            !item ||
+            !(
+              (typeof item.id === "string" &&
+                item.id.trim() !== "") ||
+              Number.isSafeInteger(item.id)
+            )
+          ) {
+            throw new Error(
+              label + "のIDが不正です。"
+            );
+          }
+
+          const id = String(item.id);
+
+          if (ids.has(id)) {
+            throw new Error(
+              label + "のIDが重複しています。"
+            );
+          }
+
+          ids.add(id);
+        }
+
+        return ids;
+      }
+
+      const tripIds = checkIds(
+        backup.trips, "旅行"
+      );
+
+      const productIds = checkIds(
+        backup.products, "商品"
+      );
+
+      const recipientIds = checkIds(
+        backup.recipients, "配布先"
+      );
+
+      checkIds(backup.allocations, "数量割当");
+
+      // 旅行データの確認
+      for (const trip of backup.trips) {
+        if (
+          typeof trip.name !== "string" ||
+          !trip.name.trim()
+        ) {
+          throw new Error("旅行名が不正です。");
+        }
+      }
+
+      // 商品データの整合性確認
+      for (const product of backup.products) {
+        if (
+          !tripIds.has(String(product.tripId)) ||
+          typeof product.name !== "string" ||
+          !product.name.trim() ||
+          !Number.isSafeInteger(product.quantity) ||
+          product.quantity < 1 ||
+          !Number.isSafeInteger(product.purchased) ||
+          product.purchased < 0 ||
+          product.purchased > product.quantity
+        ) {
+          throw new Error(
+            "商品データに不整合があります。"
+          );
+        }
+      }
+
+      // 配布先データの確認
+      for (const recipient of backup.recipients) {
+        if (
+          typeof recipient.name !== "string" ||
+          !recipient.name.trim()
+        ) {
+          throw new Error(
+            "配布先の名前が不正です。"
+          );
+        }
+      }
+
+      // 数量割当の整合性確認
+      const allocationTotals = new Map();
+
+      for (const allocation of backup.allocations) {
+        const productId = String(
+          allocation.productId
+        );
+
+        if (
+          !productIds.has(productId) ||
+          !recipientIds.has(
+            String(allocation.recipientId)
+          ) ||
+          !Number.isSafeInteger(allocation.quantity) ||
+          allocation.quantity < 1
+        ) {
+          throw new Error(
+            "数量割当データに不整合があります。"
+          );
+        }
+
+        const total =
+          (allocationTotals.get(productId) || 0) +
+          allocation.quantity;
+
+        allocationTotals.set(productId, total);
+      }
+
+      // 予定数量を超える割当がないか確認
+      for (const product of backup.products) {
+        const total =
+          allocationTotals.get(
+            String(product.id)
+          ) || 0;
+
+        if (total > product.quantity) {
+          throw new Error(
+            "割当数量が予定数量を超えています：" +
+            product.name
+          );
+        }
+      }
+
+      // 写真データを事前に確認
+      const restoredPhotos = new Map();
+
+      for (
+        const [id, dataURL] of
+        Object.entries(backup.photos)
+      ) {
+        const product = backup.products.find(
+          item => String(item.id) === id
+        );
+
+        if (
+          !product ||
+          typeof dataURL !== "string"
+        ) {
+          throw new Error(
+            "写真と商品の対応が不正です。"
+          );
+        }
+
+        restoredPhotos.set(
+          product.id,
+          dataURLToBlob(dataURL)
+        );
+      }
+
+      // 復元前の確認メッセージ
+      let message =
+        "バックアップの内容\n\n" +
+        "バックアップ形式：Version " +
+        backup.backupVersion + "\n\n" +
+        "旅行：" + backup.trips.length + "件\n" +
+        "商品：" + backup.products.length + "件\n" +
+        "写真：" + restoredPhotos.size + "枚\n" +
+        "配布先：" + backup.recipients.length + "件\n" +
+        "数量割当：" + backup.allocations.length +
+        "件\n\n" +
+        "現在のデータ\n" +
+        "旅行：" + trips.length + "件\n" +
+        "商品：" + products.length + "件\n" +
+        "配布先：" + recipients.length + "件\n" +
+        "数量割当：" + allocations.length + "件\n\n";
+
+      if (isOldBackup) {
+        message +=
+          "【旧形式バックアップの注意事項】\n" +
+          "このファイルには配布先・数量割当が" +
+          "含まれていません。\n" +
+          "現在の配布先・数量割当は" +
+          "すべて消去されます。\n\n";
+      }
+
+      message +=
+        "現在のデータをバックアップの内容に" +
+        "置き換えます。\n" +
+        "続行しますか？";
+
+      if (!confirm(message)) return;
+
+      await restoreBackupData(
+        backup, restoredPhotos
+      );
+
+      alert("バックアップから復元しました。");
+
+      location.reload();
+
+    } catch (error) {
+      console.error(
+        "バックアップ復元エラー", error
+      );
+
+      alert(
+        "復元できませんでした。\n" +
+        error.message
+      );
+    }
+  });
+
+  input.click();
+}
 
       // 写真を事前に変換して形式を確認
       const restoredPhotos = new Map();

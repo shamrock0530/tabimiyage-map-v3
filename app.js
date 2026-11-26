@@ -855,17 +855,15 @@ async function createBackup() {
       }
     }
 
-const backup = {
-  app: "tabimiyage-map",
-  version: "3.0",
-  backupVersion: 2,
-  createdAt: new Date().toISOString(),
-  trips: trips,
-  products: products,
-  photos: photoData,
-  recipients: recipients,
-  allocations: allocations
-};
+    const backup = {
+      app: "tabimiyage-map",
+      version: "3.0",
+      backupVersion: 1,
+      createdAt: new Date().toISOString(),
+      trips: trips,
+      products: products,
+      photos: photoData
+    };
 
     const json = JSON.stringify(backup, null, 2);
 
@@ -963,7 +961,6 @@ function dataURLToBlob(dataURL) {
 }
 
 // JSONファイルを選択して内容を確認
-
 async function selectBackupFile() {
   const input = document.createElement("input");
   input.type = "file";
@@ -976,250 +973,18 @@ async function selectBackupFile() {
     try {
       const backup = JSON.parse(await file.text());
 
-      // バックアップ形式の確認
       if (
-        !backup ||
         backup.app !== "tabimiyage-map" ||
         backup.version !== "3.0" ||
-        ![1, 2].includes(backup.backupVersion) ||
+        backup.backupVersion !== 1 ||
         !Array.isArray(backup.trips) ||
         !Array.isArray(backup.products) ||
         !backup.photos ||
         typeof backup.photos !== "object" ||
         Array.isArray(backup.photos)
       ) {
-        throw new Error(
-          "対応していないバックアップファイルです。"
-        );
+        throw new Error("対応していないバックアップファイルです。");
       }
-
-      // 旧形式と新形式の判定
-      const isOldBackup = backup.backupVersion === 1;
-
-      if (isOldBackup) {
-        backup.recipients = [];
-        backup.allocations = [];
-      }
-
-      if (
-        !Array.isArray(backup.recipients) ||
-        !Array.isArray(backup.allocations)
-      ) {
-        throw new Error(
-          "配布先または数量割当の形式が不正です。"
-        );
-      }
-
-      // IDの形式と重複を確認
-      function checkIds(items, label) {
-        const ids = new Set();
-
-        for (const item of items) {
-          if (
-            !item ||
-            !(
-              (typeof item.id === "string" &&
-                item.id.trim() !== "") ||
-              Number.isSafeInteger(item.id)
-            )
-          ) {
-            throw new Error(
-              label + "のIDが不正です。"
-            );
-          }
-
-          const id = String(item.id);
-
-          if (ids.has(id)) {
-            throw new Error(
-              label + "のIDが重複しています。"
-            );
-          }
-
-          ids.add(id);
-        }
-
-        return ids;
-      }
-
-      const tripIds = checkIds(
-        backup.trips, "旅行"
-      );
-
-      const productIds = checkIds(
-        backup.products, "商品"
-      );
-
-      const recipientIds = checkIds(
-        backup.recipients, "配布先"
-      );
-
-      checkIds(backup.allocations, "数量割当");
-
-      // 旅行データの確認
-      for (const trip of backup.trips) {
-        if (
-          typeof trip.name !== "string" ||
-          !trip.name.trim()
-        ) {
-          throw new Error("旅行名が不正です。");
-        }
-      }
-
-      // 商品データの整合性確認
-      for (const product of backup.products) {
-        if (
-          !tripIds.has(String(product.tripId)) ||
-          typeof product.name !== "string" ||
-          !product.name.trim() ||
-          !Number.isSafeInteger(product.quantity) ||
-          product.quantity < 1 ||
-          !Number.isSafeInteger(product.purchased) ||
-          product.purchased < 0 ||
-          product.purchased > product.quantity
-        ) {
-          throw new Error(
-            "商品データに不整合があります。"
-          );
-        }
-      }
-
-      // 配布先データの確認
-      for (const recipient of backup.recipients) {
-        if (
-          typeof recipient.name !== "string" ||
-          !recipient.name.trim()
-        ) {
-          throw new Error(
-            "配布先の名前が不正です。"
-          );
-        }
-      }
-
-      // 数量割当の整合性確認
-      const allocationTotals = new Map();
-
-      for (const allocation of backup.allocations) {
-        const productId = String(
-          allocation.productId
-        );
-
-        if (
-          !productIds.has(productId) ||
-          !recipientIds.has(
-            String(allocation.recipientId)
-          ) ||
-          !Number.isSafeInteger(allocation.quantity) ||
-          allocation.quantity < 1
-        ) {
-          throw new Error(
-            "数量割当データに不整合があります。"
-          );
-        }
-
-        const total =
-          (allocationTotals.get(productId) || 0) +
-          allocation.quantity;
-
-        allocationTotals.set(productId, total);
-      }
-
-      // 予定数量を超える割当がないか確認
-      for (const product of backup.products) {
-        const total =
-          allocationTotals.get(
-            String(product.id)
-          ) || 0;
-
-        if (total > product.quantity) {
-          throw new Error(
-            "割当数量が予定数量を超えています：" +
-            product.name
-          );
-        }
-      }
-
-      // 写真データを事前に確認
-      const restoredPhotos = new Map();
-
-      for (
-        const [id, dataURL] of
-        Object.entries(backup.photos)
-      ) {
-        const product = backup.products.find(
-          item => String(item.id) === id
-        );
-
-        if (
-          !product ||
-          typeof dataURL !== "string"
-        ) {
-          throw new Error(
-            "写真と商品の対応が不正です。"
-          );
-        }
-
-        restoredPhotos.set(
-          product.id,
-          dataURLToBlob(dataURL)
-        );
-      }
-
-      // 復元前の確認メッセージ
-      let message =
-        "バックアップの内容\n\n" +
-        "バックアップ形式：Version " +
-        backup.backupVersion + "\n\n" +
-        "旅行：" + backup.trips.length + "件\n" +
-        "商品：" + backup.products.length + "件\n" +
-        "写真：" + restoredPhotos.size + "枚\n" +
-        "配布先：" + backup.recipients.length + "件\n" +
-        "数量割当：" + backup.allocations.length +
-        "件\n\n" +
-        "現在のデータ\n" +
-        "旅行：" + trips.length + "件\n" +
-        "商品：" + products.length + "件\n" +
-        "配布先：" + recipients.length + "件\n" +
-        "数量割当：" + allocations.length + "件\n\n";
-
-      if (isOldBackup) {
-        message +=
-          "【旧形式バックアップの注意事項】\n" +
-          "このファイルには配布先・数量割当が" +
-          "含まれていません。\n" +
-          "現在の配布先・数量割当は" +
-          "すべて消去されます。\n\n";
-      }
-
-      message +=
-        "現在のデータをバックアップの内容に" +
-        "置き換えます。\n" +
-        "続行しますか？";
-
-      if (!confirm(message)) return;
-
-      await restoreBackupData(
-        backup, restoredPhotos
-      );
-
-      alert("バックアップから復元しました。");
-
-      location.reload();
-
-    } catch (error) {
-      console.error(
-        "バックアップ復元エラー", error
-      );
-
-      alert(
-        "復元できませんでした。\n" +
-        error.message
-      );
-    }
-  });
-
-  input.click();
-}
 
       // 写真を事前に変換して形式を確認
       const restoredPhotos = new Map();
@@ -1267,107 +1032,25 @@ async function selectBackupFile() {
 }
 
 // 旅行・商品・写真を復元
-
 async function restoreBackupData(backup, restoredPhotos) {
   const db = await openPhotoDB();
 
-  // 復元対象の保存データ
-  const newData = [
-    [STORAGE_KEY, JSON.stringify(backup.trips)],
-    [PRODUCT_KEY, JSON.stringify(backup.products)],
-    [RECIPIENT_KEY, JSON.stringify(backup.recipients)],
-    [ALLOCATION_KEY, JSON.stringify(backup.allocations)]
-  ];
-
   try {
-    // 現在のデータを一時保存
-    const oldData = newData.map(([key]) => [
-      key,
-      localStorage.getItem(key)
-    ]);
+    // 写真を1回のトランザクションで置き換える
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(PHOTO_STORE, "readwrite");
+      const store = tx.objectStore(PHOTO_STORE);
 
-    // 写真を置き換える処理
-    function replacePhotos() {
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(
-          PHOTO_STORE, "readwrite"
-        );
+      store.clear();
 
-        const store = tx.objectStore(PHOTO_STORE);
-
-        tx.oncomplete = resolve;
-
-        tx.onerror = () => reject(
-          tx.error || new Error("写真保存エラー")
-        );
-
-        tx.onabort = () => reject(
-          tx.error || new Error("写真保存中断")
-        );
-
-        try {
-          store.clear();
-
-          for (const [id, blob] of restoredPhotos) {
-            store.put(blob, id);
-          }
-        } catch (error) {
-          tx.abort();
-          reject(error);
-        }
-      });
-    }
-
-    try {
-      // 旅行・商品・配布先・数量割当を保存
-      for (const [key, value] of newData) {
-        localStorage.setItem(key, value);
+      for (const [id, blob] of restoredPhotos) {
+        store.put(blob, id);
       }
 
-      // 写真をまとめて置き換える
-      await replacePhotos();
-
-    } catch (error) {
-
-      // エラー時は変更前のデータに戻す
-      let rollbackFailed = false;
-
-      for (const [key, value] of oldData) {
-        try {
-          if (value === null) {
-            localStorage.removeItem(key);
-          } else {
-            localStorage.setItem(key, value);
-          }
-        } catch (rollbackError) {
-          rollbackFailed = true;
-
-          console.error(
-            "データ復旧エラー",
-            rollbackError
-          );
-        }
-      }
-
-      if (rollbackFailed) {
-        throw new Error(
-          "復元処理に失敗しました。" +
-          "元のデータを完全に戻せなかった" +
-          "可能性があります。" +
-          "保存済みバックアップを確認してください。"
-        );
-      }
-
-      throw new Error(
-        "復元処理に失敗したため、" +
-        "変更前のデータに戻しました。"
-      );
-    }
-
-  } finally {
-    db.close();
-  }
-}
+      tx.oncomplete = resolve;
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
 
     // 写真保存後に旅行・商品を置き換える
     localStorage.setItem(
@@ -2024,5 +1707,4 @@ if (document.readyState === "loading") {
 } else {
   addOrphanCleanupButton();
 }
-
 

@@ -1267,25 +1267,107 @@ async function selectBackupFile() {
 }
 
 // 旅行・商品・写真を復元
+
 async function restoreBackupData(backup, restoredPhotos) {
   const db = await openPhotoDB();
 
+  // 復元対象の保存データ
+  const newData = [
+    [STORAGE_KEY, JSON.stringify(backup.trips)],
+    [PRODUCT_KEY, JSON.stringify(backup.products)],
+    [RECIPIENT_KEY, JSON.stringify(backup.recipients)],
+    [ALLOCATION_KEY, JSON.stringify(backup.allocations)]
+  ];
+
   try {
-    // 写真を1回のトランザクションで置き換える
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(PHOTO_STORE, "readwrite");
-      const store = tx.objectStore(PHOTO_STORE);
+    // 現在のデータを一時保存
+    const oldData = newData.map(([key]) => [
+      key,
+      localStorage.getItem(key)
+    ]);
 
-      store.clear();
+    // 写真を置き換える処理
+    function replacePhotos() {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(
+          PHOTO_STORE, "readwrite"
+        );
 
-      for (const [id, blob] of restoredPhotos) {
-        store.put(blob, id);
+        const store = tx.objectStore(PHOTO_STORE);
+
+        tx.oncomplete = resolve;
+
+        tx.onerror = () => reject(
+          tx.error || new Error("写真保存エラー")
+        );
+
+        tx.onabort = () => reject(
+          tx.error || new Error("写真保存中断")
+        );
+
+        try {
+          store.clear();
+
+          for (const [id, blob] of restoredPhotos) {
+            store.put(blob, id);
+          }
+        } catch (error) {
+          tx.abort();
+          reject(error);
+        }
+      });
+    }
+
+    try {
+      // 旅行・商品・配布先・数量割当を保存
+      for (const [key, value] of newData) {
+        localStorage.setItem(key, value);
       }
 
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
-    });
+      // 写真をまとめて置き換える
+      await replacePhotos();
+
+    } catch (error) {
+
+      // エラー時は変更前のデータに戻す
+      let rollbackFailed = false;
+
+      for (const [key, value] of oldData) {
+        try {
+          if (value === null) {
+            localStorage.removeItem(key);
+          } else {
+            localStorage.setItem(key, value);
+          }
+        } catch (rollbackError) {
+          rollbackFailed = true;
+
+          console.error(
+            "データ復旧エラー",
+            rollbackError
+          );
+        }
+      }
+
+      if (rollbackFailed) {
+        throw new Error(
+          "復元処理に失敗しました。" +
+          "元のデータを完全に戻せなかった" +
+          "可能性があります。" +
+          "保存済みバックアップを確認してください。"
+        );
+      }
+
+      throw new Error(
+        "復元処理に失敗したため、" +
+        "変更前のデータに戻しました。"
+      );
+    }
+
+  } finally {
+    db.close();
+  }
+}
 
     // 写真保存後に旅行・商品を置き換える
     localStorage.setItem(

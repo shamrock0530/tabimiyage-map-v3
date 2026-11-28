@@ -2046,6 +2046,7 @@ async function restoreCompleteBackupData(
           tx.abort();
         } catch (abortError) {
           console.error(abortError);
+          reject(error);
         }
       }
     });

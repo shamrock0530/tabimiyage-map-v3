@@ -855,15 +855,17 @@ async function createBackup() {
       }
     }
 
-    const backup = {
-      app: "tabimiyage-map",
-      version: "3.0",
-      backupVersion: 1,
-      createdAt: new Date().toISOString(),
-      trips: trips,
-      products: products,
-      photos: photoData
-    };
+const backup = {
+  app: "tabimiyage-map",
+  version: "3.0",
+  backupVersion: 2,
+  createdAt: new Date().toISOString(),
+  trips: trips,
+  products: products,
+  photos: photoData,
+  recipients: recipients,
+  allocations: allocations
+};
 
     const json = JSON.stringify(backup, null, 2);
 

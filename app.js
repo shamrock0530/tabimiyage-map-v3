@@ -1995,3 +1995,88 @@ function prepareBackupStorageData(backup) {
     ]
   ];
 }
+// STEP 14-F 完全復元処理
+async function restoreCompleteBackupData(
+  backup,
+  restoredPhotos
+) {
+  validateBackupBasic(backup);
+  validateBackupTripsAndProducts(backup);
+  validateBackupRecipientsAndAllocations(backup);
+  validateBackupQuantities(backup);
+
+  const newData = prepareBackupStorageData(backup);
+
+  const oldData = newData.map(([key]) => [
+    key,
+    localStorage.getItem(key)
+  ]);
+
+  const db = await openPhotoDB();
+
+  try {
+    // 旅行・商品・配布先・数量割当を保存
+    for (const [key, value] of newData) {
+      localStorage.setItem(key, value);
+    }
+
+    // 写真をトランザクションで置き換える
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(
+        PHOTO_STORE,
+        "readwrite"
+      );
+
+      tx.oncomplete = resolve;
+
+      tx.onabort = () => reject(
+        tx.error || new Error("写真の復元に失敗しました。")
+      );
+
+      try {
+        const store = tx.objectStore(PHOTO_STORE);
+
+        store.clear();
+
+        for (const [id, blob] of restoredPhotos) {
+          store.put(blob, id);
+        }
+      } catch (error) {
+        try {
+          tx.abort();
+        } catch (abortError) {
+          console.error(abortError);
+        }
+      }
+    });
+
+  } catch (error) {
+    // 保存失敗時は元のデータに戻す
+    let rollbackFailed = false;
+
+    for (const [key, value] of oldData) {
+      try {
+        if (value === null) {
+          localStorage.removeItem(key);
+        } else {
+          localStorage.setItem(key, value);
+        }
+      } catch (rollbackError) {
+        rollbackFailed = true;
+        console.error(rollbackError);
+      }
+    }
+
+    if (rollbackFailed) {
+      throw new Error(
+        "元のデータへの復旧に失敗しました。" +
+        "保存済みのバックアップを保管してください。"
+      );
+    }
+
+    throw error;
+
+  } finally {
+    db.close();
+  }
+}

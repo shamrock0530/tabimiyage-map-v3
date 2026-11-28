@@ -1884,3 +1884,74 @@ function validateBackupRecipientsAndAllocations(backup) {
 
   return true;
 }
+// STEP 14-E 数量の整合性検証
+function validateBackupQuantities(backup) {
+  const plannedQuantities = new Map();
+  const allocatedQuantities = new Map();
+
+  for (const product of backup.products) {
+    if (
+      !Number.isSafeInteger(product.quantity) ||
+      product.quantity < 1
+    ) {
+      throw new Error(
+        "商品「" + product.name +
+        "」の予定数量が不正です。"
+      );
+    }
+
+    if (
+      !Number.isSafeInteger(product.purchased) ||
+      product.purchased < 0 ||
+      product.purchased > product.quantity
+    ) {
+      throw new Error(
+        "商品「" + product.name +
+        "」の購入済み数量が不正です。"
+      );
+    }
+
+    plannedQuantities.set(
+      String(product.id),
+      product.quantity
+    );
+  }
+
+  if (backup.backupVersion === 1) {
+    return true;
+  }
+
+  for (const allocation of backup.allocations) {
+    if (
+      !Number.isSafeInteger(allocation.quantity) ||
+      allocation.quantity < 1
+    ) {
+      throw new Error("割当数量が不正です。");
+    }
+
+    const productId = String(allocation.productId);
+
+    if (!plannedQuantities.has(productId)) {
+      throw new Error(
+        "数量割当に対応する商品が存在しません。"
+      );
+    }
+
+    const total =
+      (allocatedQuantities.get(productId) || 0) +
+      allocation.quantity;
+
+    if (
+      !Number.isSafeInteger(total) ||
+      total > plannedQuantities.get(productId)
+    ) {
+      throw new Error(
+        "割当数量の合計が予定数量を超えています。"
+      );
+    }
+
+    allocatedQuantities.set(productId, total);
+  }
+
+  return true;
+}

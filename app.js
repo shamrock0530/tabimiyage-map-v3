@@ -975,54 +975,48 @@ async function selectBackupFile() {
     try {
       const backup = JSON.parse(await file.text());
 
-      if (
-        backup.app !== "tabimiyage-map" ||
-        backup.version !== "3.0" ||
-        backup.backupVersion !== 1 ||
-        !Array.isArray(backup.trips) ||
-        !Array.isArray(backup.products) ||
-        !backup.photos ||
-        typeof backup.photos !== "object" ||
-        Array.isArray(backup.photos)
-      ) {
-        throw new Error("対応していないバックアップファイルです。");
-      }
+      // バックアップデータの事前検証
+      validateBackupBasic(backup);
+      validateBackupTripsAndProducts(backup);
+      validateBackupRecipientsAndAllocations(backup);
+      validateBackupQuantities(backup);
 
-      // 写真を事前に変換して形式を確認
+      // 写真データの事前変換
       const restoredPhotos = new Map();
 
       for (const [id, dataURL] of Object.entries(backup.photos)) {
+        const product = backup.products.find(
+          item => String(item.id) === id
+        );
+
         if (
           typeof dataURL !== "string" ||
-          !backup.products.some(product => String(product.id) === id)
+          !product
         ) {
-          throw new Error("写真と商品の対応が不正です。");
+          throw new Error(
+            "写真と商品の対応が不正です。"
+          );
         }
 
-        const product = backup.products.find(
-  item => String(item.id) === id
-);
-
-restoredPhotos.set(
-  product.id,
-  dataURLToBlob(dataURL)
-);
+        restoredPhotos.set(
+          product.id,
+          dataURLToBlob(dataURL)
+        );
       }
 
-      const message =
-        "バックアップの内容\n\n" +
-        "旅行：" + backup.trips.length + "件\n" +
-        "商品：" + backup.products.length + "件\n" +
-        "写真：" + restoredPhotos.size + "枚\n\n" +
-        "現在のデータ\n" +
-        "旅行：" + trips.length + "件\n" +
-        "商品：" + products.length + "件\n\n" +
-        "現在のデータをバックアップの内容に置き換えます。\n" +
-        "続行しますか？";
+      // 復元前の確認メッセージ
+      const message = await buildRestoreConfirmMessage(
+        backup,
+        restoredPhotos
+      );
 
       if (!confirm(message)) return;
 
-      await restoreBackupData(backup, restoredPhotos);
+      // 完全復元処理
+      await restoreCompleteBackupData(
+        backup,
+        restoredPhotos
+      );
 
       alert("バックアップから復元しました。");
 
@@ -1030,6 +1024,7 @@ restoredPhotos.set(
 
     } catch (error) {
       console.error("バックアップ復元エラー", error);
+
       alert(
         "復元できませんでした。\n" +
         error.message
@@ -1038,6 +1033,7 @@ restoredPhotos.set(
   });
 
   input.click();
+}
 }
 
 // 旅行・商品・写真を復元

@@ -1955,3 +1955,43 @@ function validateBackupQuantities(backup) {
 
   return true;
 }
+// STEP 14-F 復元用の保存データを準備
+function prepareBackupStorageData(backup) {
+  const restoredRecipients =
+    backup.backupVersion === 2
+      ? backup.recipients
+      : [];
+
+  const restoredAllocations =
+    backup.backupVersion === 2
+      ? backup.allocations
+      : [];
+
+  if (
+    !Array.isArray(restoredRecipients) ||
+    !Array.isArray(restoredAllocations)
+  ) {
+    throw new Error(
+      "配布先または数量割当データが不正です。"
+    );
+  }
+
+  return [
+    [
+      STORAGE_KEY,
+      JSON.stringify(backup.trips)
+    ],
+    [
+      PRODUCT_KEY,
+      JSON.stringify(backup.products)
+    ],
+    [
+      RECIPIENT_KEY,
+      JSON.stringify(restoredRecipients)
+    ],
+    [
+      ALLOCATION_KEY,
+      JSON.stringify(restoredAllocations)
+    ]
+  ];
+}

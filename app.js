@@ -1034,7 +1034,6 @@ async function selectBackupFile() {
 
   input.click();
 }
-}
 
 // 旅行・商品・写真を復元
 async function restoreBackupData(backup, restoredPhotos) {

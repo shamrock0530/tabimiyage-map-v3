@@ -2081,3 +2081,66 @@ async function restoreCompleteBackupData(
     db.close();
   }
 }
+// STEP 14-G 復元前の確認メッセージ
+async function buildRestoreConfirmMessage(
+  backup,
+  restoredPhotos
+) {
+  let currentPhotoCount = 0;
+
+  for (const product of products) {
+    const photo = await getPhoto(product.id);
+
+    if (photo) {
+      currentPhotoCount++;
+    }
+  }
+
+  const restoredRecipientCount =
+    backup.backupVersion === 2
+      ? backup.recipients.length
+      : 0;
+
+  const restoredAllocationCount =
+    backup.backupVersion === 2
+      ? backup.allocations.length
+      : 0;
+
+  let message =
+    "【バックアップから復元】\n\n" +
+    "現在 → 復元後\n\n" +
+    "旅行：" +
+    trips.length + "件 → " +
+    backup.trips.length + "件\n" +
+    "商品：" +
+    products.length + "件 → " +
+    backup.products.length + "件\n" +
+    "写真：" +
+    currentPhotoCount + "枚 → " +
+    restoredPhotos.size + "枚\n" +
+    "配布先：" +
+    recipients.length + "件 → " +
+    restoredRecipientCount + "件\n" +
+    "数量割当：" +
+    allocations.length + "件 → " +
+    restoredAllocationCount + "件\n\n";
+
+  if (backup.backupVersion === 1) {
+    message +=
+      "【旧形式バックアップについて】\n" +
+      "このファイルには配布先・数量割当の" +
+      "情報が含まれていません。\n" +
+      "復元すると現在の配布先・数量割当は" +
+      "すべて削除されます。\n\n";
+  }
+
+  message +=
+    "【注意】\n" +
+    "現在のデータはバックアップの内容で" +
+    "上書きされます。\n" +
+    "復元前に現在のデータをバックアップ" +
+    "することをおすすめします。\n\n" +
+    "復元を実行しますか？";
+
+  return message;
+}

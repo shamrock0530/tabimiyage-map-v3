@@ -999,7 +999,14 @@ async function selectBackupFile() {
           throw new Error("写真と商品の対応が不正です。");
         }
 
-        restoredPhotos.set(id, dataURLToBlob(dataURL));
+        const product = backup.products.find(
+  item => String(item.id) === id
+);
+
+restoredPhotos.set(
+  product.id,
+  dataURLToBlob(dataURL)
+);
       }
 
       const message =

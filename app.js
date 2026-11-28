@@ -1810,3 +1810,77 @@ function validateBackupTripsAndProducts(backup) {
 
   return true;
 }
+// STEP 14-E 配布先・数量割当の整合性検証
+function validateBackupRecipientsAndAllocations(backup) {
+  if (backup.backupVersion === 1) {
+    return true;
+  }
+
+  const recipientIds = new Set();
+  const allocationIds = new Set();
+  const allocationPairs = new Set();
+
+  const productIds = new Set(
+    backup.products.map(product => String(product.id))
+  );
+
+  for (const recipient of backup.recipients) {
+    if (
+      !recipient ||
+      typeof recipient.id !== "string" ||
+      recipient.id.trim() === "" ||
+      typeof recipient.name !== "string" ||
+      recipient.name.trim() === ""
+    ) {
+      throw new Error("配布先データが不正です。");
+    }
+
+    if (recipientIds.has(recipient.id)) {
+      throw new Error("配布先IDが重複しています。");
+    }
+
+    recipientIds.add(recipient.id);
+  }
+
+  for (const allocation of backup.allocations) {
+    if (
+      !allocation ||
+      typeof allocation.id !== "string" ||
+      allocation.id.trim() === ""
+    ) {
+      throw new Error("数量割当データが不正です。");
+    }
+
+    if (allocationIds.has(allocation.id)) {
+      throw new Error("数量割当IDが重複しています。");
+    }
+
+    if (!productIds.has(String(allocation.productId))) {
+      throw new Error(
+        "数量割当に対応する商品が存在しません。"
+      );
+    }
+
+    if (!recipientIds.has(allocation.recipientId)) {
+      throw new Error(
+        "数量割当に対応する配布先が存在しません。"
+      );
+    }
+
+    const pair = JSON.stringify([
+      String(allocation.productId),
+      allocation.recipientId
+    ]);
+
+    if (allocationPairs.has(pair)) {
+      throw new Error(
+        "同じ商品と配布先の割当が重複しています。"
+      );
+    }
+
+    allocationIds.add(allocation.id);
+    allocationPairs.add(pair);
+  }
+
+  return true;
+}

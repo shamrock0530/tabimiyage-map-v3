@@ -1748,3 +1748,65 @@ function validateBackupBasic(backup) {
 
   return true;
 }
+// STEP 14-E 旅行・商品の整合性検証
+function validateBackupTripsAndProducts(backup) {
+  const tripIds = new Set();
+  const productIds = new Set();
+
+  function validId(id) {
+    return (
+      (typeof id === "string" && id.trim() !== "") ||
+      Number.isSafeInteger(id)
+    );
+  }
+
+  for (const trip of backup.trips) {
+    if (
+      !trip ||
+      !validId(trip.id) ||
+      typeof trip.name !== "string" ||
+      trip.name.trim() === ""
+    ) {
+      throw new Error("旅行データが不正です。");
+    }
+
+    const id = String(trip.id);
+
+    if (tripIds.has(id)) {
+      throw new Error("旅行IDが重複しています。");
+    }
+
+    tripIds.add(id);
+  }
+
+  for (const product of backup.products) {
+    if (
+      !product ||
+      !validId(product.id) ||
+      typeof product.name !== "string" ||
+      product.name.trim() === ""
+    ) {
+      throw new Error("商品データが不正です。");
+    }
+
+    const id = String(product.id);
+
+    if (productIds.has(id)) {
+      throw new Error("商品IDが重複しています。");
+    }
+
+    if (
+      !validId(product.tripId) ||
+      !tripIds.has(String(product.tripId))
+    ) {
+      throw new Error(
+        "商品「" + product.name +
+        "」に対応する旅行が存在しません。"
+      );
+    }
+
+    productIds.add(id);
+  }
+
+  return true;
+}

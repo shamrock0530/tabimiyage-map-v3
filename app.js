@@ -1716,4 +1716,35 @@ if (document.readyState === "loading") {
 } else {
   addOrphanCleanupButton();
 }
+// STEP 14-E バックアップデータの基本検証
+function validateBackupBasic(backup) {
+  if (
+    !backup ||
+    typeof backup !== "object" ||
+    backup.app !== "tabimiyage-map" ||
+    backup.version !== "3.0" ||
+    ![1, 2].includes(backup.backupVersion) ||
+    !Array.isArray(backup.trips) ||
+    !Array.isArray(backup.products) ||
+    !backup.photos ||
+    typeof backup.photos !== "object" ||
+    Array.isArray(backup.photos)
+  ) {
+    throw new Error(
+      "対応していないバックアップファイルです。"
+    );
+  }
 
+  if (backup.backupVersion === 2) {
+    if (
+      !Array.isArray(backup.recipients) ||
+      !Array.isArray(backup.allocations)
+    ) {
+      throw new Error(
+        "配布先または数量割当データが不正です。"
+      );
+    }
+  }
+
+  return true;
+}
